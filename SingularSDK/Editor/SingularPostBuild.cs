@@ -6,6 +6,7 @@ using UnityEditor.Callbacks;
 using UnityEditor.Android;
 #if UNITY_IOS
 using UnityEditor.iOS.Xcode;
+using UnityEditor.iOS.Xcode.Extensions;
 #endif
 using System.IO;
 using System.Linq;
