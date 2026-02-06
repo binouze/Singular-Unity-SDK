@@ -9,7 +9,6 @@ using UnityEditor.iOS.Xcode;
 using UnityEditor.iOS.Xcode.Extensions;
 #endif
 using System.IO;
-using System.Linq;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
