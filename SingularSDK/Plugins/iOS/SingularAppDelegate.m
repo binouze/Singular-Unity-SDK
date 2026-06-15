@@ -1,3 +1,4 @@
+/*
 #import "UnityAppController.h"
 #import "SingularStateWrapper.h"
 #import <Singular/Singular.h>
@@ -7,7 +8,7 @@
 @end
 
 
-IMPL_APP_CONTROLLER_SUBCLASS(SingularAppDelegate)
+//IMPL_APP_CONTROLLER_SUBCLASS(SingularAppDelegate)
 
 
 @implementation SingularAppDelegate
@@ -53,3 +54,4 @@ continueUserActivity:(NSUserActivity *)userActivity
 
 
 @end
+*/

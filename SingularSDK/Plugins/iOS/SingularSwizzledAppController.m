@@ -6,7 +6,6 @@
 @implementation UnityAppController (SingularSwizzledAppController)
 
 /// Uncomment the code below in case the SingularAppDelegate is clashing with another plugin
-/*
 static IMP originalContinueUserActivity __unused;
 static IMP originalDidFinishLaunchingWithOptions __unused;
 
@@ -87,6 +86,5 @@ BOOL continueUserActivity(id self, SEL _cmd, UIApplication* application, NSUserA
         class_replaceMethod(klass, originalSelector, (IMP)continueUserActivity, method_getTypeEncoding(swizzledMethod));
     }
 }
- */
 
 @end

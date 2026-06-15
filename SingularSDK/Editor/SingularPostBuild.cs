@@ -26,9 +26,11 @@ public class SingularPostBuild
             Debug.Log("Start Xcode project related configuration of SDK......");
             AddiOSDependencies(pathToBuiltProject);
             
+			/*
             #if SINGULAR_USES_CUSTOM_APP_DELEGATE
             HandleCustomAppDelegate(pathToBuiltProject);
             #endif
+			*/
         }
     }
 
@@ -48,7 +50,7 @@ public class SingularPostBuild
         pbxProject.AddFrameworkToProject(targetGuid, "Security.framework", false);
         pbxProject.AddFrameworkToProject(targetGuid, "SystemConfiguration.framework", false);
         pbxProject.AddFrameworkToProject(targetGuid, "AdSupport.framework", false);
-        pbxProject.AddFrameworkToProject(targetGuid, "Webkit.framework", false);
+        pbxProject.AddFrameworkToProject(targetGuid, "WebKit.framework", false);
         pbxProject.AddFrameworkToProject(targetGuid, "StoreKit.framework", false);
         pbxProject.AddFrameworkToProject(targetGuid, "AdServices.framework", true); // optional=true
         
@@ -60,6 +62,7 @@ public class SingularPostBuild
         pbxProject.WriteToFile(projectPath);
     }
 
+	/*
     #if SINGULAR_USES_CUSTOM_APP_DELEGATE
     static void HandleCustomAppDelegate(string pathToBuiltProject)
     {
@@ -73,6 +76,7 @@ public class SingularPostBuild
         File.WriteAllText( SingularAppDelegateFile, SingularAppDelegateFileReplacement);
     }
     #endif
+	*/
 }
 
 #endif
