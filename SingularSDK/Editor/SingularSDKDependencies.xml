@@ -6,6 +6,11 @@
       </repositories>
     </androidPackage>
   </androidPackages>
+  <!-- iOS : Swift Package en priorite (Swift Package Manager actif dans EDM), le pod reste en repli.
+    Meme version que le pod. replacesPod avec le tiret : le nom du pod doit correspondre exactement. -->
+  <remoteSwiftPackage url="https://github.com/singular-labs/Singular-iOS-SDK.git" version="12.14.2">
+    <swiftPackage name="Singular" replacesPod="Singular-SDK"/>
+  </remoteSwiftPackage>
   <iosPods>
     <iosPod name="Singular-SDK" version="12.14.2" minTargetSdk="12.0" bitcodeEnabled="false" addToAllTargets="false">
     </iosPod>
