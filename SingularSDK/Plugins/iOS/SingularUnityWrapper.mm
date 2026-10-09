@@ -8,8 +8,9 @@
 #import <Singular/Singular.h>
 #import "SingularStateWrapper.h"
 #import <AdSupport/ASIdentifierManager.h>
+#include <exception>
 
-enum { __STRING__,__INT__,__LONG__,__FLOAT__,__DOUBLE__,__NULL__,__ARRAY__,__DICTIONARY__};
+enum { __STRING__,__INT__,__LONG__,__FLOAT__,__DOUBLE__,__NULL__,__BOOL__,__ARRAY__,__DICTIONARY__};
 
 // Unity log levels
 // Verbose=2, Debug=3, Info=4, Warn=5, Error=6, Assert=7
@@ -68,12 +69,13 @@ static NSDictionary* singularLinkParamsToDictionary(SingularLinkParams* params){
     };
 }
 
-static NSString* dictionaryToJson(NSDictionary* dictionary){
+static NSString* dictionaryToJson(NSDictionary *dictionary) {
     NSError *writeError = nil;
     NSData *jsonData = [NSJSONSerialization dataWithJSONObject:dictionary
                                                        options:NSJSONWritingPrettyPrinted
                                                          error:&writeError];
-    if (writeError){
+    if (writeError) {
+        NSLog(@"[SingularUnityBridge] error converting dictionary to data %@", [writeError localizedDescription]);
         return nil;
     }
     
@@ -81,16 +83,53 @@ static NSString* dictionaryToJson(NSDictionary* dictionary){
 }
 
 static NSString* singularLinkParamsToJson(SingularLinkParams* params){
-    NSDictionary* values = singularLinkParamsToDictionary(params);
+    NSDictionary *values = singularLinkParamsToDictionary(params);
     return dictionaryToJson(values);
 }
 
 static void sendSdkMessage(const char *methodName, NSString *param) {
-    const char* str = [param UTF8String];
-    char* result = (char*)malloc(strlen(str)+1);
-    strcpy(result,str);
-    
-    UnitySendMessage("SingularSDKObject", methodName, result);
+    NSLog(@"[SingularUnityBridge] sendSdkMessage invoked");
+
+    try {
+        if (!methodName) {
+            NSLog(@"[SingularUnityBridge] UnitySendMessage skipped: methodName is NULL");
+            return;
+        }
+        
+        const char *paramString = param ? [param UTF8String] : "";
+        char *methodCopy = strdup(methodName);
+        char *paramCopy  = strdup(paramString);
+        
+        if (!methodCopy || !paramCopy) {
+            NSLog(@"[SingularUnityBridge] sendSdkMessage skipped.failed to allocate copies for UnitySendMessage");
+            if (methodCopy) {
+                free(methodCopy);
+            }
+            
+            if (paramCopy) {
+                free(paramCopy);
+            }
+            
+            return;
+        }
+        
+        dispatch_async(dispatch_get_main_queue(), ^{
+            try {
+                NSLog(@"[SingularUnityBridge] sending callback %s with params %s", methodCopy, paramCopy);
+                UnitySendMessage("SingularSDKObject", methodCopy, paramCopy);
+            } catch (const std::exception& e) {
+                NSLog(@"[SingularUnityBridge] UnitySendMessage exception %s", e.what());
+            } catch (...) {
+                NSLog(@"[SingularUnityBridge] UnitySendMessage unknown exception");
+            }
+            free(methodCopy);
+            free(paramCopy);
+        });
+    } catch(const std::exception& e) {
+        NSLog(@"[SingularUnityBridge] exception in sendSdkMessage %s", e.what());
+    } catch (...) {
+        NSLog(@"[SingularUnityBridge] unknown C++ exception in sendSdkMessage");
+    }
 }
 
 static void handleSingularLinkParams(SingularLinkParams *params) {
@@ -110,7 +149,7 @@ static void handleConversionValueUpdated(int value) {
 
 static void handleConversionValuesUpdated(int value, int coarse, bool lock) {
     // UnitySendMessage only accepts strings
-    NSString * jsonString = dictionaryToJson(@{
+    NSString *jsonString = dictionaryToJson(@{
                 @"value": [NSString stringWithFormat:@"%d",value],
                 @"coarse": [NSString stringWithFormat:@"%d",coarse],
                 @"lock": lock? @"true":@"false"
@@ -118,14 +157,54 @@ static void handleConversionValuesUpdated(int value, int coarse, bool lock) {
     sendSdkMessage("ConversionValuesUpdated", jsonString);
 }
 
+static SingularUserDetails* userDetailsFromDictionary(NSDictionary *userDetailsDictionary) {
+    if (![userDetailsDictionary isKindOfClass:[NSDictionary class]] || [userDetailsDictionary count] == 0) {
+        return nil;
+    }
+
+    SingularUserDetails *userDetails = [[SingularUserDetails alloc] init];
+
+    NSString *email = [userDetailsDictionary objectForKey:@"email"];
+    if (email) {
+        [userDetails setEmail:email];
+    }
+
+    NSString *phoneNumber = [userDetailsDictionary objectForKey:@"phoneNumber"];
+    if (phoneNumber) {
+        [userDetails setPhoneNumber:phoneNumber];
+    }
+
+    NSString *emailSTD = [userDetailsDictionary objectForKey:@"emailSTD"];
+    if (emailSTD) {
+        [userDetails setEmailSTD:emailSTD];
+    }
+
+    NSString *emailNoDots = [userDetailsDictionary objectForKey:@"emailNoDots"];
+    if (emailNoDots) {
+        [userDetails setEmailNoDots:emailNoDots];
+    }
+
+    NSString *phoneE164 = [userDetailsDictionary objectForKey:@"phoneE164"];
+    if (phoneE164) {
+        [userDetails setPhoneE164:phoneE164];
+    }
+
+    NSString *phoneDigits = [userDetailsDictionary objectForKey:@"phoneDigits"];
+    if (phoneDigits) {
+        [userDetails setPhoneDigits:phoneDigits];
+    }
+
+    return userDetails;
+}
+
 extern "C" {
 
-    bool createReferrerShortLink_(const char * baseLink,
-        const char * referrerName,
-        const char * referrerId,
-        const char * args){
+    bool createReferrerShortLink_(const char *baseLink,
+        const char *referrerName,
+        const char *referrerId,
+        const char *args){
             
-        NSDictionary* argsDictionary = [NSJSONSerialization JSONObjectWithData:[[NSString stringWithUTF8String:args]
+        NSDictionary *argsDictionary = [NSJSONSerialization JSONObjectWithData:[[NSString stringWithUTF8String:args]
                                                                     dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
         [Singular createReferrerShortLink: [NSString stringWithUTF8String:baseLink]
                 referrerName: [NSString stringWithUTF8String:referrerName]
@@ -133,7 +212,7 @@ extern "C" {
                 passthroughParams: argsDictionary
                 completionHandler:^(NSString *data, NSError *error) {
 
-                    NSString * jsonString = dictionaryToJson(@{
+                    NSString *jsonString = dictionaryToJson(@{
                                 @"data": data? data: @"",
                                 @"error": error ? error.description: @""
                             });
@@ -141,12 +220,12 @@ extern "C" {
         }];
     }
     
-    bool StartSingularSession_(const char* configString){
-        NSDictionary* config = [NSJSONSerialization JSONObjectWithData:[[NSString stringWithUTF8String:configString]
+    bool StartSingularSession_(const char *configString){
+        NSDictionary *config = [NSJSONSerialization JSONObjectWithData:[[NSString stringWithUTF8String:configString]
                                                                         dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
         
-        NSString* apiKey = [config objectForKey:@"apiKey"];
-        NSString* apiSecret = [config objectForKey:@"secret"];
+        NSString *apiKey = [config objectForKey:@"apiKey"];
+        NSString *apiSecret = [config objectForKey:@"secret"];
         void (^singularLinkHandler)(SingularLinkParams*) = ^(SingularLinkParams* params) {
             handleSingularLinkParams(params);
         };
@@ -230,7 +309,12 @@ extern "C" {
         singularConfig.enableLogging = [[config objectForKey:@"enableLogging"] boolValue];
         int logLevel = [[config objectForKey:@"logLevel"] intValue];
         singularConfig.logLevel = mapUnityLogLevelToiOS(logLevel);
-        
+
+        SingularUserDetails *userDetails = userDetailsFromDictionary([config objectForKey:@"userDetails"]);
+        if (userDetails) {
+            singularConfig.userDetails = userDetails;
+        }
+
         [Singular start:singularConfig];
         
         return true;
@@ -288,9 +372,11 @@ extern "C" {
             [tmpDictionary setObject:[NSNumber numberWithDouble:[[NSString stringWithUTF8String:value] doubleValue]] forKey:[NSString stringWithUTF8String:key]];
         }else if(type == __NULL__){
             [tmpDictionary setObject:[NSNull null] forKey:[NSString stringWithUTF8String:key]];
+        }else if(type == __BOOL__){
+            [tmpDictionary setObject:[NSNumber numberWithBool:(strcmp(value, "1") == 0)] forKey:[NSString stringWithUTF8String:key]];
         }
     }
-    
+
     void Push_Container_NSDictionary(char* key, int containerIndex){
         [tmpDictionary setObject:[tmpMasterArray objectAtIndex:(NSUInteger)containerIndex] forKey:[NSString stringWithUTF8String:key]];
     }
@@ -329,9 +415,11 @@ extern "C" {
             [dict setObject:[NSNumber numberWithDouble:[[NSString stringWithUTF8String:value] doubleValue]] forKey:[NSString stringWithUTF8String:key]];
         }else if(type == __NULL__){
             [dict setObject:[NSNull null] forKey:[NSString stringWithUTF8String:key]];
+        }else if(type == __BOOL__){
+            [dict setObject:[NSNumber numberWithBool:(strcmp(value, "1") == 0)] forKey:[NSString stringWithUTF8String:key]];
         }
     }
-    
+
     void Push_To_Child_Array(char* value,int type, int arrayIndex){
         NSMutableArray *array = [tmpMasterArray objectAtIndex:(NSUInteger)arrayIndex];
         if(type == __STRING__){
@@ -346,6 +434,8 @@ extern "C" {
             [array addObject:[NSNumber numberWithDouble:[[NSString stringWithUTF8String:value] doubleValue]]];
         }else if(type == __NULL__){
             [array addObject:[NSNull null]];
+        }else if(type == __BOOL__){
+            [array addObject:[NSNumber numberWithBool:(strcmp(value, "1") == 0)]];
         }
     }
     
@@ -395,11 +485,10 @@ extern "C" {
         [Singular setGender:[NSString stringWithUTF8String:gender]];
     }
     
-    void RegisterDeviceTokenForUninstall_(const char * APNSToken){
+    void RegisterDeviceTokenForUninstall_(const char *APNSToken) {
         unsigned int token_length = (unsigned int)strlen(APNSToken);
         
-        if (token_length % 2 != 0)
-        {
+        if (token_length % 2 != 0) {
             return; // odd length
         }
         
@@ -412,12 +501,9 @@ extern "C" {
     void RegisterDeferredDeepLinkHandler_(){
         [Singular registerDeferredDeepLinkHandler:^(NSString *deeplink) {
             if(deeplink != NULL){
-                const char* str = [deeplink UTF8String];
-                char* result = (char*)malloc(strlen(str)+1);
-                strcpy(result,str);
-                UnitySendMessage("SingularSDKObject", "DeepLinkHandler", result);
-            }else{
-                UnitySendMessage("SingularSDKObject", "DeepLinkHandler", "");
+                sendSdkMessage("DeepLinkHandler", deeplink);
+            } else {
+                sendSdkMessage("DeepLinkHandler", @"");
             }
         }];
     }
@@ -565,6 +651,35 @@ extern "C" {
 
     void ClearGlobalProperties_() {
         [Singular clearGlobalProperties];
+    }
+
+    /* User Details */
+
+    void SetUserDetails_(const char* userDetailsJson) {
+        if (!userDetailsJson) {
+            NSLog(@"[SingularUnityBridge] SetUserDetails_ called with NULL user details, clearing the user details");
+            [Singular clearUserDetails];
+            return;
+        }
+
+        NSDictionary *userDetailsDictionary =
+            [NSJSONSerialization JSONObjectWithData:[[NSString stringWithUTF8String:userDetailsJson]
+                                                     dataUsingEncoding:NSUTF8StringEncoding]
+                                            options:0
+                                              error:nil];
+
+        SingularUserDetails *userDetails = userDetailsFromDictionary(userDetailsDictionary);
+        if (!userDetails) {
+            NSLog(@"[SingularUnityBridge] SetUserDetails_ could not build user details from the given json, clearing the user details");
+            [Singular clearUserDetails];
+            return;
+        }
+
+        [Singular setUserDetails:userDetails];
+    }
+
+    void ClearUserDetails_() {
+        [Singular clearUserDetails];
     }
 
     /* SKAN Methods */
